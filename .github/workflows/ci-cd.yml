@@ -1,0 +1,37 @@
+# .github/workflows/ci-cd.yml
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar código
+        uses: actions/checkout@v2
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Ejecutar tests
+        run: echo "Test ficticio pasado 👍"
+
+      - name: Escaneo de vulnerabilidades con Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+
+      - name: Despliegue en entorno de pruebas
+        run: echo "Simulación despliegue en entorno de pruebas 🧪"
+
+      - name: Validación política de despliegue
+        run: echo "Política OK ✅"
+
+      - name: Despliegue a producción simulado
+        run: echo "Simulación despliegue a producción 🚀"
+
+      - name: Monitoreo post-despliegue
+        run: echo "Monitoreo activo 🛡️"
