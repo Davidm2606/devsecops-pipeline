@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: devsecops-app
+  labels:
+    app: devsecops
 spec:
   replicas: 1
   selector:
@@ -14,8 +16,9 @@ spec:
     spec:
       containers:
         - name: devsecops-app
-          image: mateo566/devsecops-app:latest
+          image: ghcr.io/davidm2606/devsecops-pipeline:latest  # Esta línea se actualiza automáticamente con el pipeline
           ports:
             - containerPort: 3000
+          imagePullPolicy: Always  # Asegura que siempre use la última versión si usas :latest
       imagePullSecrets:
-        - name: regcred
+        - name: regcred  # Este secreto debe estar creado en el clúster con tus credenciales GHCR

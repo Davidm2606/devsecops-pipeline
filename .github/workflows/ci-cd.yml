@@ -1,37 +1,59 @@
-# .github/workflows/ci-cd.yml
-name: DevSecOps Pipeline
+name: CI/CD Pipeline with Trivy and ArgoCD
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
 
 jobs:
-  build:
+  build_scan_push:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Clonar código
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Instalar dependencias
-        run: npm install
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
 
-      - name: Ejecutar tests
-        run: echo "Test ficticio pasado 👍"
-
-      - name: Escaneo de vulnerabilidades con Trivy
-        uses: aquasecurity/trivy-action@master
+      - name: Login to GHCR
+        uses: docker/login-action@v2
         with:
-          scan-type: fs
-          scan-ref: .
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Despliegue en entorno de pruebas
-        run: echo "Simulación despliegue en entorno de pruebas 🧪"
+      - name: Set lowercase repo owner
+        run: echo "REPO_OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Validación política de despliegue
-        run: echo "Política OK ✅"
+      - name: Extract short SHA
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Despliegue a producción simulado
-        run: echo "Simulación despliegue a producción 🚀"
+      - name: Build Docker image
+        run: |
+          docker build -t ghcr.io/${REPO_OWNER_LC}/devsecops-pipeline:${{ steps.vars.outputs.sha_short }} .
 
-      - name: Monitoreo post-despliegue
-        run: echo "Monitoreo activo 🛡️"
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@0.12.0
+        with:
+          image-ref: ghcr.io/${{ env.REPO_OWNER_LC }}/devsecops-pipeline:${{ steps.vars.outputs.sha_short }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/${REPO_OWNER_LC}/devsecops-pipeline:${{ steps.vars.outputs.sha_short }}
+
+      - name: Patch deployment YAML with new image tag
+        run: |
+          sed -i "s|image: ghcr.io/.*/devsecops-pipeline:.*|image: ghcr.io/${REPO_OWNER_LC}/devsecops-pipeline:${{ steps.vars.outputs.sha_short }}|" manifests/deployment.yaml
+
+      - name: Commit and push updated manifest
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add manifests/deployment.yaml
+          git commit -m "Update image tag to ${{ steps.vars.outputs.sha_short }}"
+          git push origin master
